@@ -22,13 +22,21 @@ class LocationNetwork(nn.Module):
             location_mean: mean of location distribution (B, 2)
             location_sample: sampled location (B, 2)
         """
+        # Convert to float32 for all location-related computations
+        hidden_state = hidden_state.float()
         location_mean = torch.tanh(self.fc(hidden_state))
         
         # Sample location from normal distribution
         if self.training:
-            location_sample = location_mean + self.std * torch.randn_like(location_mean)
+            # Ensure random sampling is done in float32
+            noise = torch.randn_like(location_mean, dtype=torch.float32)
+            location_sample = location_mean + self.std * noise
             location_sample = torch.tanh(location_sample)  # Bound to [-1, 1]
         else:
             location_sample = location_mean
+            
+        # Convert back to the original dtype
+        location_mean = location_mean.to(hidden_state.dtype)
+        location_sample = location_sample.to(hidden_state.dtype)
             
         return location_mean, location_sample

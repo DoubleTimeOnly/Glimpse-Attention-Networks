@@ -5,6 +5,7 @@ from torch.distributions import Normal
 
 from glimpse_attention_networks.models.baseline_network import BaselineNetwork
 from glimpse_attention_networks.models.classification_network import ActionNetwork
+from glimpse_attention_networks.models.context_network import ContextNetwork
 from glimpse_attention_networks.models.glimpse_network import GlimpseNetwork
 from glimpse_attention_networks.models.location_network import LocationNetwork
 from glimpse_attention_networks.models.sequence_network import CoreNetwork
@@ -16,6 +17,7 @@ class RecurrentAttentionModel(pl.LightningModule):
     """
     def __init__(
         self, 
+        coarse_wh: tuple[int, int] = (16, 16),
         glimpse_size: int = 8,
         num_patches: int = 1,
         num_glimpses: int = 6,
@@ -25,7 +27,7 @@ class RecurrentAttentionModel(pl.LightningModule):
         glimpse_hidden: int = 256,
         location_std: float = 0.17,
         learning_rate: float = 1e-3,
-        baseline_coeff: float = 0.5
+        baseline_coeff: float = 0.5,
     ):
         super().__init__()
         
@@ -58,6 +60,8 @@ class RecurrentAttentionModel(pl.LightningModule):
             hidden_size=hidden_size,
             num_classes=num_classes
         )
+
+        self.context_network = ContextNetwork(out_channels=hidden_size, input_wh=coarse_wh)
         
         self.baseline_network = BaselineNetwork(hidden_size=hidden_size)
         
@@ -80,8 +84,12 @@ class RecurrentAttentionModel(pl.LightningModule):
         batch_size = x.size(0)
         
         # Initialize location and hidden state
-        location = self.init_location.expand(batch_size, -1)
-        hidden_state = None
+        hidden_state_2 = self.context_network(x)
+        cell_state_2 = torch.zeros_like(hidden_state_2)
+        states_1 = torch.zeros_like(hidden_state_2), torch.zeros_like(hidden_state_2)
+        states_2 = (hidden_state_2, cell_state_2)
+
+        _, location = self.location_network(hidden_state_2)
         
         # Storage for REINFORCE
         locations = []
@@ -94,15 +102,19 @@ class RecurrentAttentionModel(pl.LightningModule):
             glimpse_repr = self.glimpse_network(x, location)
             
             # Update core network
-            h, hidden_state = self.core_network(glimpse_repr, hidden_state)
+            states_1, states_2 = self.core_network(
+                glimpse_repr,
+                states_1,
+                states_2
+            )
             
             # Predict baseline
-            baseline = self.baseline_network(h)
+            baseline = self.baseline_network(states_1[0])
             baselines.append(baseline)
             
             # Predict next location (except for last step)
             if t < self.num_glimpses - 1:
-                location_mean, location = self.location_network(h)
+                location_mean, location = self.location_network(states_2[0])
                 
                 # Calculate log probability for REINFORCE
                 location_dist = Normal(location_mean, self.location_std)
@@ -112,7 +124,7 @@ class RecurrentAttentionModel(pl.LightningModule):
                 location_log_probs.append(location_log_prob)
         
         # Final action prediction
-        action_logits = self.action_network(h)
+        action_logits = self.action_network(states_2[0])
         
         return action_logits, locations, location_log_probs, baselines
     

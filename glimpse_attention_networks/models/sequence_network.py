@@ -10,26 +10,29 @@ class CoreNetwork(nn.Module):
     def __init__(self, glimpse_hidden: int = 256, hidden_size: int = 256):
         super(CoreNetwork, self).__init__()
         self.hidden_size = hidden_size
-        self.rnn = nn.LSTMCell(glimpse_hidden, hidden_size)
+        self.rnn1 = nn.LSTMCell(glimpse_hidden, hidden_size)
+        self.rnn2 = nn.LSTMCell(hidden_size, hidden_size)
         
-    def forward(self, glimpse_repr: torch.Tensor, 
-                hidden_state: Optional[tuple[torch.Tensor, torch.Tensor]] = None) -> tuple[torch.Tensor, torch.Tensor]:
+    def forward(
+        self,
+        glimpse_repr: torch.Tensor,
+        states_1: tuple[torch.Tensor, torch.Tensor],
+        states_2: tuple[torch.Tensor, torch.Tensor],
+    ) -> tuple[torch.Tensor, torch.Tensor]:
         """
         Update RNN state with glimpse representation.
         
         Args:
             glimpse_repr: glimpse representation (B, glimpse_hidden)
             hidden_state: previous (h, c) state
+            states_1: previous (h, c) state for the first LSTM layer
+            states_2: previous (h, c) state for the second LSTM layer
             
         Returns:
             h: new hidden state (B, hidden_size)
             (h, c): new hidden and cell states
         """
-        if hidden_state is None:
-            batch_size = glimpse_repr.size(0)
-            h = torch.zeros(batch_size, self.hidden_size, device=glimpse_repr.device)
-            c = torch.zeros(batch_size, self.hidden_size, device=glimpse_repr.device)
-            hidden_state = (h, c)
-            
-        h, c = self.rnn(glimpse_repr, hidden_state)
-        return h, (h, c)
+        
+        h1, c1 = self.rnn1(glimpse_repr, states_1)
+        h2, c2 = self.rnn2(h1, states_2)
+        return (h1, c1), (h2, c2)
