@@ -2,6 +2,8 @@ import torch
 import torch.nn.functional as F
 import pytorch_lightning as pl
 from torch.distributions import Normal
+from pathlib import Path
+from typing import List, Dict, Any
 
 from glimpse_attention_networks.models.baseline_network import BaselineNetwork
 from glimpse_attention_networks.models.classification_network import ActionNetwork
@@ -9,6 +11,7 @@ from glimpse_attention_networks.models.context_network import ContextNetwork
 from glimpse_attention_networks.models.glimpse_network import GlimpseNetwork
 from glimpse_attention_networks.models.location_network import LocationNetwork
 from glimpse_attention_networks.models.sequence_network import CoreNetwork
+from glimpse_attention_networks.visualization.attention_visualizer import AttentionVisualizer
 
 
 class RecurrentAttentionModel(pl.LightningModule):
@@ -19,7 +22,7 @@ class RecurrentAttentionModel(pl.LightningModule):
         self, 
         coarse_wh: tuple[int, int] = (16, 16),
         glimpse_size: int = 8,
-        num_patches: int = 1,
+        num_patches: int = 2,
         num_glimpses: int = 6,
         num_classes: int = 10,
         channels: int = 1,
@@ -28,6 +31,8 @@ class RecurrentAttentionModel(pl.LightningModule):
         location_std: float = 0.17,
         learning_rate: float = 1e-3,
         baseline_coeff: float = 0.5,
+        num_visualization_samples: int = 5,
+        visualization_dir: str = "diags",
     ):
         super().__init__()
         
@@ -36,6 +41,8 @@ class RecurrentAttentionModel(pl.LightningModule):
         self.num_glimpses = num_glimpses
         self.location_std = location_std
         self.baseline_coeff = baseline_coeff
+        self.num_visualization_samples = num_visualization_samples
+        self.visualization_dir = visualization_dir
         
         # Initialize networks
         self.glimpse_network = GlimpseNetwork(
@@ -67,6 +74,10 @@ class RecurrentAttentionModel(pl.LightningModule):
         
         # Initialize first location (center of image)
         self.register_buffer('init_location', torch.zeros(1, 2))
+        
+        # Store test samples for visualization
+        self.test_samples = None
+        self.test_labels = None
         
     def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, list, list, list]:
         """
@@ -245,3 +256,44 @@ class RecurrentAttentionModel(pl.LightningModule):
         # Use separate optimizers for different components if needed
         optimizer = torch.optim.Adam(self.parameters(), lr=self.hparams.learning_rate)
         return optimizer
+
+    def on_test_batch_end(self, outputs, batch, batch_idx):
+        """Store first test batch for visualization."""
+        if batch_idx == 0:  # Only store samples from first batch
+            images, labels = batch
+            self.test_samples = images
+            self.test_labels = labels
+
+    def on_test_epoch_end(self):
+        """Create attention visualizations after testing."""
+        if self.test_samples is None:
+            return
+
+        # Create visualization directory
+        save_dir = Path(self.visualization_dir)
+        save_dir.mkdir(exist_ok=True)
+        
+        # Limit to num_visualization_samples
+        images = self.test_samples[:self.num_visualization_samples]
+        labels = self.test_labels[:self.num_visualization_samples]
+        
+        # Create visualizer
+        visualizer = AttentionVisualizer()
+        
+        # Visualize attention for each sample
+        for i, (image, label) in enumerate(zip(images, labels)):
+            # Add batch dimension
+            image = image.unsqueeze(0)
+            
+            # Create visualization
+            save_path = save_dir / f"attention_sample_{i}_label_{label.item()}.png"
+            visualizer.visualize_attention_sequence(
+                self, 
+                image, 
+                save_path=str(save_path),
+                glimpse_size=self.hparams.glimpse_size,
+                num_patches=self.hparams.num_patches
+            )
+            print(f"Saved attention visualization to {save_path}")
+            # print(f"Created visualization for sample {i} (label: {label.item()})")
+        

@@ -1,3 +1,4 @@
+from pathlib import Path
 import torch
 
 
@@ -5,7 +6,13 @@ class AttentionVisualizer:
     """Utility class for visualizing attention patterns."""
     
     @staticmethod
-    def visualize_attention_sequence(model, image, save_path=None):
+    def visualize_attention_sequence(
+        model,
+        image, 
+        glimpse_size: int,
+        num_patches: int,
+        save_path=None
+    ):
         """
         Visualize the sequence of attention locations for a given image.
         
@@ -48,20 +55,21 @@ class AttentionVisualizer:
                 axes[i + 1].imshow(img_np)
                 
                 # Add attention window
-                glimpse_size = 8
-                rect = patches.Rectangle(
-                    (x - glimpse_size // 2, y - glimpse_size // 2),
-                    glimpse_size, glimpse_size,
-                    linewidth=2, edgecolor='red', facecolor='none'
-                )
-                axes[i + 1].add_patch(rect)
+                for idx in range(num_patches):
+                    patch_size = glimpse_size * (2 ** idx)
+                    rect = patches.Rectangle(
+                        (x - patch_size // 2, y - patch_size // 2),
+                        patch_size, patch_size,
+                        linewidth=2, edgecolor='red', facecolor='none'
+                    )
+                    axes[i + 1].add_patch(rect)
                 axes[i + 1].set_title(f'Glimpse {i + 1}')
                 axes[i + 1].axis('off')
             
             plt.tight_layout()
             
             if save_path:
-                print(f"Saving attention visualization to {Path(save_path).absolute()}")
+                # print(f"Saving attention visualization to {Path(save_path).absolute()}")
                 plt.savefig(save_path, dpi=150, bbox_inches='tight')
             
             plt.show()

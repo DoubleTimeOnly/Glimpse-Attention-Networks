@@ -1,0 +1,39 @@
+# Training configuration for Recurrent Attention Model (RAM)
+
+defaults:
+  - callbacks: training_callbacks
+  - _self_
+
+# Model architecture parameters
+model:
+  _target_: glimpse_attention_networks.models.ram_lit_module.RecurrentAttentionModel
+  glimpse_size: 8
+  num_patches: 2
+  num_glimpses: 3
+  num_classes: 10
+  channels: 3  # SVHN has 3 channels (RGB)
+  hidden_size: 1024
+  glimpse_hidden: 256
+  location_std: 0.03
+  coarse_wh: [16, 16]
+  learning_rate: 1e-3
+  baseline_coeff: 0.5
+  num_visualization_samples: 5
+  visualization_dir: "diags"
+
+# Trainer configuration
+trainer:
+  _target_: pytorch_lightning.Trainer
+  max_epochs: -1  # Set to 50 for full training
+  max_steps: 200
+  precision: 32  # Options: 16 (mixed precision) or 32 (full precision)
+  log_every_n_steps: 50
+  val_check_interval: 100  # Validate twice per epoch
+
+# Data parameters
+datamodule:
+  _target_: glimpse_attention_networks.datasets.svhn_datamodule.SVHNDataModule
+  image_size: 54  # SVHN images are 32x32
+  data_dir: /mnt/c/users/victor/documents/projects/Glimpse Attention Networks/data/svhn
+  batch_size: 128
+  num_workers: 4

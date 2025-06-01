@@ -10,6 +10,7 @@ class SVHNDataModule(pl.LightningDataModule):
         batch_size: int = 32,
         num_workers: int = 4,
         train_val_split: float = 0.9,
+        image_size: int = 54,
     ):
         super().__init__()
         self.data_dir = data_dir
@@ -20,6 +21,7 @@ class SVHNDataModule(pl.LightningDataModule):
         # Define transforms
         self.transform = transforms.Compose([
             transforms.ToTensor(),
+            transforms.Resize((image_size, image_size)),
             transforms.Normalize((0.5,), (0.5,))  # Normalize to [-1, 1]
         ])
         
