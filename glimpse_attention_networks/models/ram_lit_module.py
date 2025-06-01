@@ -216,12 +216,12 @@ class RecurrentAttentionModel(pl.LightningModule):
         self.log('val_classification_loss', classification_loss)
         self.log('val_reinforce_loss', reinforce_loss)
         self.log('val_baseline_loss', baseline_loss)
-        self.log('val_total_loss', total_loss)
+        self.log('val_total_loss', total_loss, on_step=False, on_epoch=True)
         
         # Accuracy
         predicted = action_logits.argmax(dim=1)
         accuracy = (predicted == targets).float().mean()
-        self.log('val_accuracy', accuracy)
+        self.log('val_accuracy', accuracy, prog_bar=True, on_step=False, on_epoch=True)
         
         return total_loss
     

@@ -25,10 +25,10 @@ model:
 trainer:
   _target_: pytorch_lightning.Trainer
   max_epochs: -1  # Set to 50 for full training
-  max_steps: 200
+  max_steps: 10000
   precision: 32  # Options: 16 (mixed precision) or 32 (full precision)
   log_every_n_steps: 50
-  val_check_interval: 100  # Validate twice per epoch
+  check_val_every_n_epoch: 5
 
 # Data parameters
 datamodule:
