@@ -270,7 +270,7 @@ class RecurrentAttentionModel(pl.LightningModule):
             return
 
         # Create visualization directory
-        save_dir = Path(self.visualization_dir)
+        save_dir = Path(self.trainer.logger.log_dir) / "diags"
         save_dir.mkdir(exist_ok=True)
         
         # Limit to num_visualization_samples

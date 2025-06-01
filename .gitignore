@@ -1,5 +1,9 @@
 data/*
 lightning_logs/*
+results/*
+*.png
+*.python-version
+
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -196,3 +200,4 @@ cython_debug/
 .cursorignore
 .cursorindexingignore
 lightning_logs/version_0/hparams.yaml
+attention_visualization.png

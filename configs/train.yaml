@@ -37,3 +37,6 @@ datamodule:
   data_dir: /mnt/c/users/victor/documents/projects/Glimpse Attention Networks/data/svhn
   batch_size: 128
   num_workers: 4
+
+# Logging configuration
+log_dir: "/mnt/c/users/victor/documents/projects/Glimpse Attention Networks/results"
