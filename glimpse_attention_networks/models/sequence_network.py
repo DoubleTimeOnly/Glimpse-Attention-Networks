@@ -15,9 +15,10 @@ class CoreNetwork(nn.Module):
         
     def forward(
         self,
-        glimpse_repr: torch.Tensor,
+        r1_input: torch.Tensor,
         states_1: tuple[torch.Tensor, torch.Tensor],
         states_2: tuple[torch.Tensor, torch.Tensor],
+        first_step: bool,
     ) -> tuple[torch.Tensor, torch.Tensor]:
         """
         Update RNN state with glimpse representation.
@@ -32,7 +33,16 @@ class CoreNetwork(nn.Module):
             h: new hidden state (B, hidden_size)
             (h, c): new hidden and cell states
         """
-        
-        h1, c1 = self.rnn1(glimpse_repr, states_1)
-        h2, c2 = self.rnn2(h1, states_2)
+        h1, c1 =  self.rnn1(r1_input, states_1)
+
+        if first_step:
+            r2_input = torch.zeros(
+                (r1_input.shape[0], self.hidden_size), dtype=torch.float32, device=r1_input.device
+            )
+        else:
+            r2_input = h1
+
+        h2, c2 = self.rnn2(r2_input, states_2)
+
         return (h1, c1), (h2, c2)
+

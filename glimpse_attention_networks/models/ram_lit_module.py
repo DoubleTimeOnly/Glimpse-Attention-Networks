@@ -43,6 +43,7 @@ class RecurrentAttentionModel(pl.LightningModule):
         self.baseline_coeff = baseline_coeff
         self.num_visualization_samples = num_visualization_samples
         self.visualization_dir = visualization_dir
+        self._hidden_size = hidden_size
         
         # Initialize networks
         self.glimpse_network = GlimpseNetwork(
@@ -94,83 +95,100 @@ class RecurrentAttentionModel(pl.LightningModule):
         """
         batch_size = x.size(0)
         
-        # Initialize location and hidden state
-        hidden_state_2 = self.context_network(x)
-        cell_state_2 = torch.zeros_like(hidden_state_2)
-        states_1 = torch.zeros_like(hidden_state_2), torch.zeros_like(hidden_state_2)
-        states_2 = (hidden_state_2, cell_state_2)
-
-        _, location = self.location_network(hidden_state_2)
-        
         # Storage for REINFORCE
         locations = []
         location_log_probs = []
         baselines = []
+        action_logits = []
+        
+        # Initialize location and hidden state
+        init_state = self.context_network(x)
+
+        def create_zero(batch_size: int):
+            return torch.zeros(
+                (batch_size, self._hidden_size), dtype=torch.float32, device=self.device
+            )
+
+        r1_zero_inputs = create_zero(batch_size)
+        r1_zero_state = (create_zero(batch_size), create_zero(batch_size))
+        r2_init_state = (init_state, create_zero(batch_size))
+
+        states_1, states_2 = self.core_network(
+            r1_input=r1_zero_inputs,
+            states_1=r1_zero_state,
+            states_2=r2_init_state,
+            first_step=True
+        )
         
         # Take glimpses
         for t in range(self.num_glimpses):
-            # Process glimpse
-            glimpse_repr = self.glimpse_network(x, location)
+            # Predict next location (except for last step)
+            location_mean, location = self.location_network(states_2[0])
             
+            # Process glimpse
+            r1_input = self.glimpse_network(x, location)
+
+            # Calculate log probability for REINFORCE
+            location_dist = Normal(location_mean, self.location_std)
+            location_log_prob = location_dist.log_prob(location).sum(dim=1)
+            
+            locations.append(location)
+            location_log_probs.append(location_log_prob)
+
             # Update core network
             states_1, states_2 = self.core_network(
-                glimpse_repr,
+                r1_input,
                 states_1,
-                states_2
+                states_2,
+                first_step=False
             )
-            
+
+            # action prediction
+            action_logit = self.action_network(states_1[0])
+            action_logits.append(action_logit)
+
             # Predict baseline
-            baseline = self.baseline_network(states_1[0])
+            baseline = self.baseline_network(states_2[0])
             baselines.append(baseline)
-            
-            # Predict next location (except for last step)
-            if t < self.num_glimpses - 1:
-                location_mean, location = self.location_network(states_2[0])
-                
-                # Calculate log probability for REINFORCE
-                location_dist = Normal(location_mean, self.location_std)
-                location_log_prob = location_dist.log_prob(location).sum(dim=1)
-                
-                locations.append(location)
-                location_log_probs.append(location_log_prob)
-        
-        # Final action prediction
-        action_logits = self.action_network(states_2[0])
         
         return action_logits, locations, location_log_probs, baselines
     
-    def compute_loss(self, action_logits: torch.Tensor, locations: list, 
-                    location_log_probs: list, baselines: list, 
-                    targets: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    def compute_loss(
+        self,
+        action_logits: torch.Tensor,
+        locations: list,
+        location_log_probs: list,
+        baselines: list,
+        targets: torch.Tensor
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """
         Compute the complete loss function including classification loss,
         REINFORCE loss, and baseline loss.
         """
-        batch_size = action_logits.size(0)
-        
+        # N, C, G
+        action_logits = torch.stack(action_logits, dim=2)
+        # N, G
+        sequence_targets = targets.unsqueeze(1).expand(-1, self.num_glimpses)
+
         # Classification loss (supervised)
-        classification_loss = F.cross_entropy(action_logits, targets, reduction='mean')
+        classification_loss = F.cross_entropy(action_logits, sequence_targets, reduction='mean')
         
         # Reward: 1 if correct classification, 0 otherwise
-        predicted = action_logits.argmax(dim=1)
-        rewards = (predicted == targets).float()
-        
-        # REINFORCE loss for location network
-        reinforce_loss = 0
-        if len(location_log_probs) > 0:
-            for t, (log_prob, baseline) in enumerate(zip(location_log_probs, baselines[:-1])):
-                # Use baseline for variance reduction
-                advantage = rewards.unsqueeze(1) - baseline.detach()
-                reinforce_loss += -(log_prob.unsqueeze(1) * advantage).mean()
-        
-        # Baseline loss (MSE between baseline and actual reward)
-        baseline_loss = 0
-        for baseline in baselines:
-            baseline_loss += F.mse_loss(baseline, rewards.unsqueeze(1))
-        baseline_loss /= len(baselines)
-        
+        predicted = action_logits.argmax(dim=1)     # N, G
+        rewards = (predicted == sequence_targets).float()    #  N, G
+
+        # N, G
+        baselines = torch.cat(baselines, dim=1)
+
+        advantage = rewards - baselines.detach()
+        location_log_probs = torch.stack(location_log_probs, dim=1)     # N,G
+
+        reinforce_loss = -(location_log_probs * advantage).mean()
+
+        baseline_loss = F.mse_loss(baselines, rewards)
+
         return classification_loss, reinforce_loss, baseline_loss
-    
+
     def training_step(self, batch, batch_idx):
         x, targets = batch
         
@@ -181,20 +199,20 @@ class RecurrentAttentionModel(pl.LightningModule):
         classification_loss, reinforce_loss, baseline_loss = self.compute_loss(
             action_logits, locations, location_log_probs, baselines, targets
         )
-        
-        # Total loss
-        total_loss = classification_loss + reinforce_loss + self.baseline_coeff * baseline_loss
+
+        total_loss = classification_loss + reinforce_loss * 0.1 + baseline_loss
         
         # Logging
-        self.log('train_classification_loss', classification_loss)
-        self.log('train_reinforce_loss', reinforce_loss)
-        self.log('train_baseline_loss', baseline_loss)
-        self.log('train_total_loss', total_loss)
+        self.log('train/classification_loss', classification_loss)
+        self.log('train/reinforce_loss', reinforce_loss)
+        self.log('train/baseline_loss', baseline_loss)
+        self.log('train/total_loss', total_loss)
         
         # Accuracy
-        predicted = action_logits.argmax(dim=1)
+        # TODO: check if this is correct
+        predicted = action_logits[-1].argmax(dim=1)
         accuracy = (predicted == targets).float().mean()
-        self.log('train_accuracy', accuracy)
+        self.log('train_accuracy', accuracy, prog_bar=True, on_step=False, on_epoch=True)
         
         return total_loss
     
@@ -213,13 +231,14 @@ class RecurrentAttentionModel(pl.LightningModule):
         total_loss = classification_loss + reinforce_loss + self.baseline_coeff * baseline_loss
         
         # Logging
-        self.log('val_classification_loss', classification_loss)
-        self.log('val_reinforce_loss', reinforce_loss)
-        self.log('val_baseline_loss', baseline_loss)
-        self.log('val_total_loss', total_loss, on_step=False, on_epoch=True)
+        self.log('val/classification_loss', classification_loss)
+        self.log('val/reinforce_loss', reinforce_loss)
+        self.log('val/baseline_loss', baseline_loss)
+        self.log('val/total_loss', total_loss, on_step=False, on_epoch=True)
         
         # Accuracy
-        predicted = action_logits.argmax(dim=1)
+        # TODO: check if this is correct
+        predicted = action_logits[-1].argmax(dim=1)
         accuracy = (predicted == targets).float().mean()
         self.log('val_accuracy', accuracy, prog_bar=True, on_step=False, on_epoch=True)
         
@@ -240,10 +259,10 @@ class RecurrentAttentionModel(pl.LightningModule):
         total_loss = classification_loss + reinforce_loss + self.baseline_coeff * baseline_loss
         
         # Logging
-        self.log('test_classification_loss', classification_loss)
-        self.log('test_reinforce_loss', reinforce_loss)
-        self.log('test_baseline_loss', baseline_loss)
-        self.log('test_total_loss', total_loss)
+        self.log('test/classification_loss', classification_loss)
+        self.log('test/reinforce_loss', reinforce_loss)
+        self.log('test/baseline_loss', baseline_loss)
+        self.log('test/total_loss', total_loss)
         
         # Accuracy
         predicted = action_logits.argmax(dim=1)
