@@ -1,7 +1,7 @@
 import torch
 from torchvision import datasets, transforms
 import pytorch_lightning as pl
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, ConcatDataset
 
 class SVHNDataModule(pl.LightningDataModule):
     def __init__(
@@ -26,10 +26,16 @@ class SVHNDataModule(pl.LightningDataModule):
         ])
         
     def prepare_data(self):
-        # Download the dataset if it doesn't exist
+        # Download the datasets if they don't exist
         datasets.SVHN(
             root=self.data_dir,
             split='train',
+            download=True,
+            transform=None
+        )
+        datasets.SVHN(
+            root=self.data_dir,
+            split='extra',
             download=True,
             transform=None
         )
@@ -42,13 +48,22 @@ class SVHNDataModule(pl.LightningDataModule):
     
     def setup(self, stage=None):
         if stage == 'fit' or stage is None:
-            # Load full training set
-            full_train = datasets.SVHN(
+            # Load training and extra sets
+            train_dataset = datasets.SVHN(
                 root=self.data_dir,
                 split='train',
                 download=False,
                 transform=self.transform
             )
+            extra_dataset = datasets.SVHN(
+                root=self.data_dir,
+                split='extra',
+                download=False,
+                transform=self.transform
+            )
+            
+            # Combine train and extra datasets
+            full_train = ConcatDataset([train_dataset, extra_dataset])
             
             # Split into train and validation
             train_size = int(len(full_train) * self.train_val_split)
