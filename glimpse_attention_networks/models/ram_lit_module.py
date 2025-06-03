@@ -265,7 +265,8 @@ class RecurrentAttentionModel(pl.LightningModule):
         self.log('test/total_loss', total_loss)
         
         # Accuracy
-        predicted = action_logits.argmax(dim=1)
+        # TODO: check if this is correct
+        predicted = action_logits[-1].argmax(dim=1)
         accuracy = (predicted == targets).float().mean()
         self.log('test_accuracy', accuracy)
         

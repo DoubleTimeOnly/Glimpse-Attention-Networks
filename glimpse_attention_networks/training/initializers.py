@@ -6,7 +6,7 @@ from pathlib import Path
 
 import hydra
 from pytorch_lightning.callbacks import Callback
-from pytorch_lightning.loggers import CSVLogger
+from pytorch_lightning.loggers import CSVLogger, TensorBoardLogger
 
 
 def initialize_callbacks(callbacks_config: Dict[str, Any]) -> List[Callback]:
@@ -26,5 +26,10 @@ def initialize_loggers(log_dir: str) -> List[CSVLogger]:
         name="metrics",
         version=None  # No versioning, just use the experiment name
     )
+    tensorboard_logger = TensorBoardLogger(
+        save_dir=log_dir,
+        name="tensorboard",
+        version=None
+    )
     
-    return [csv_logger] 
+    return [csv_logger, tensorboard_logger] 
