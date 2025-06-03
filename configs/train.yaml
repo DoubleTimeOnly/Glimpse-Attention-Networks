@@ -13,22 +13,24 @@ model:
   num_classes: 10
   channels: 3  # SVHN has 3 channels (RGB)
   hidden_size: 1024
-  glimpse_hidden: 256
+  glimpse_hidden: 1024
   location_std: 0.03
   coarse_wh: [16, 16]
   learning_rate: 1e-3
   baseline_coeff: 0.5
-  num_visualization_samples: 5
+  num_visualization_samples: 10
   visualization_dir: "diags"
 
 # Trainer configuration
 trainer:
   _target_: pytorch_lightning.Trainer
   max_epochs: -1  # Set to 50 for full training
-  max_steps: 10000
   precision: 32  # Options: 16 (mixed precision) or 32 (full precision)
   log_every_n_steps: 50
-  check_val_every_n_epoch: 5
+  max_steps: 100000
+  check_val_every_n_epoch: 1
+  gradient_clip_val: 5
+  gradient_clip_algorithm: norm
 
 # Data parameters
 datamodule:

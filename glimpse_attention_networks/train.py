@@ -39,21 +39,11 @@ def train_ram_model(config: DictConfig, experiment_name: str):
     # Initialize data module
     data_module = hydra.utils.instantiate(config.datamodule)
 
-    # Train the model
-    trainer.fit(model, data_module)
+    try:
+        # Train the model
+        trainer.fit(model, data_module)
     
-    # Test the model
-    trainer.test(ckpt_path="best", datamodule=data_module)
-    print(f"Test results saved to {log_dir}")
+    except KeyboardInterrupt:
+        trainer.test(ckpt_path="best", datamodule=data_module)
 
 
-if __name__ == "__main__":
-    # Train the model
-    config = load_config(
-        config_name='train', 
-        overrides=[]
-    )
-    print("Starting RAM training...")
-    experiment_name = "example_experiment"
-    train_ram_model(config, experiment_name)
-    print("Training completed!")
