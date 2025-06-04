@@ -9,6 +9,7 @@ class BaselineNetwork(nn.Module):
         super(BaselineNetwork, self).__init__()
         self.fc = nn.Sequential(
             nn.Linear(hidden_size, 128),
+            nn.BatchNorm1d(128),
             nn.ReLU(),
             nn.Linear(128, 1)
         )

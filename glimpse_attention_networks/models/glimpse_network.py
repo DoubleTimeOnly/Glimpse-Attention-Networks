@@ -24,18 +24,21 @@ class GlimpseNetwork(nn.Module):
         glimpse_input_size = num_patches * channels * glimpse_size * glimpse_size
         self.glimpse_fc = nn.Sequential(
             nn.Linear(glimpse_input_size, hidden_size),
+            nn.BatchNorm1d(hidden_size),
             nn.ReLU()
         )
         
         # Updated to handle 2D coordinates
         self.location_fc = nn.Sequential(
             nn.Linear(2, hidden_size),
+            nn.BatchNorm1d(hidden_size),
             nn.ReLU()
         )
         
         # Combine glimpse and location information
         self.combined_fc = nn.Sequential(
             nn.Linear(hidden_size + hidden_size, glimpse_hidden),
+            nn.BatchNorm1d(glimpse_hidden),
             nn.ReLU()
         )
         
