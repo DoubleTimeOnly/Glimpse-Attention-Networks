@@ -26,25 +26,26 @@ class SVHNDataModule(pl.LightningDataModule):
         ])
         
     def prepare_data(self):
-        # Download the datasets if they don't exist
-        datasets.SVHN(
-            root=self.data_dir,
-            split='train',
-            download=True,
-            transform=None
-        )
-        datasets.SVHN(
-            root=self.data_dir,
-            split='extra',
-            download=True,
-            transform=None
-        )
-        datasets.SVHN(
-            root=self.data_dir,
-            split='test',
-            download=True,
-            transform=None
-        )
+        # # Download the datasets if they don't exist
+        # datasets.SVHN(
+        #     root=self.data_dir,
+        #     split='train',
+        #     download=True,
+        #     transform=None
+        # )
+        # datasets.SVHN(
+        #     root=self.data_dir,
+        #     split='extra',
+        #     download=True,
+        #     transform=None
+        # )
+        # datasets.SVHN(
+        #     root=self.data_dir,
+        #     split='test',
+        #     download=True,
+        #     transform=None
+        # )
+        pass
     
     def setup(self, stage=None):
         if stage == 'fit' or stage is None:

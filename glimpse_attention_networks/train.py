@@ -42,8 +42,12 @@ def train_ram_model(config: DictConfig, experiment_name: str):
     try:
         # Train the model
         trainer.fit(model, data_module)
+        trainer.test(ckpt_path="best", datamodule=data_module)
     
     except KeyboardInterrupt:
         trainer.test(ckpt_path="best", datamodule=data_module)
+    
+    except Exception as e:
+        print(e)
 
 

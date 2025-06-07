@@ -6,14 +6,14 @@ defaults:
 
 # Model architecture parameters
 model:
-  _target_: glimpse_attention_networks.models.ram_lit_module.RecurrentAttentionModel
+  _target_: glimpse_attention_networks.models.glimpse_attention_model.GlimpseAttentionModel
   glimpse_size: 8
   num_patches: 2
   num_glimpses: 3
   num_classes: 10
   channels: 3  # SVHN has 3 channels (RGB)
-  hidden_size: 1024
-  glimpse_hidden: 1024
+  hidden_size: 64
+  glimpse_hidden: 64
   location_std: 0.03
   coarse_wh: [16, 16]
   learning_rate: 1e-3
@@ -27,10 +27,10 @@ trainer:
   max_epochs: -1  # Set to 50 for full training
   precision: 32  # Options: 16 (mixed precision) or 32 (full precision)
   log_every_n_steps: 50
-  # max_steps: 100000
+  # max_steps: 15000
   # check_val_every_n_epoch: 1
-  max_steps: 2000
-  val_check_interval: 100
+  max_steps: 2500
+  val_check_interval: 500
   gradient_clip_val: 5
   gradient_clip_algorithm: norm
 

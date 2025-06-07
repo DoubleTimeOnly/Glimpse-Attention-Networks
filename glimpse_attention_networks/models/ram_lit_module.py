@@ -304,9 +304,14 @@ class RecurrentAttentionModel(pl.LightningModule):
         for i, (image, label) in enumerate(zip(images, labels)):
             # Add batch dimension
             image = image.unsqueeze(0)
-            
+            # Get model prediction
+            with torch.no_grad():
+                logits, _, _, _ = self(image)
+                pred = logits[-1].argmax(dim=1).item()
+
             # Create visualization
-            save_path = save_dir / f"attention_sample_{i}_label_{label.item()}.png"
+            name = f"attention_sample_{i}_true_{label.item()}_pred_{pred}.png"
+            save_path = save_dir / name
             visualizer.visualize_attention_sequence(
                 self, 
                 image, 
@@ -315,5 +320,6 @@ class RecurrentAttentionModel(pl.LightningModule):
                 num_patches=self.hparams.num_patches
             )
             print(f"Saved attention visualization to {save_path}")
-            # print(f"Created visualization for sample {i} (label: {label.item()})")
         
+
+
